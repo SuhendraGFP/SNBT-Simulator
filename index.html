@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SNBT Simulator</title>
+<link rel="stylesheet" href="snbt_style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js"
+  onload="window._katexReady = true;"></script>
+</head>
+<body>
+
+<div id="app">
+
+<!-- ════════════════════════════════════════════
+     HOME SCREEN
+════════════════════════════════════════════ -->
+<div id="screen-home" class="screen active">
+
+  <div class="home-hero">
+    <div class="home-hero-logo">
+      <div class="logo-icon">⚡</div>
+      <h1>SNBT Simulator</h1>
+    </div>
+    <p>Simulasi UTBK realistis — soal acak, skor IRT, tanpa login</p>
+  </div>
+
+  <div class="card mb-16">
+    <div class="section-header">
+      <span class="section-title">📂 Status File Soal</span>
+      <span id="loaded-count" class="badge badge-blue">Memuat…</span>
+    </div>
+    <div id="file-status-grid" class="file-status-grid"></div>
+    <div class="info-box mt-12">
+      Letakkan semua file <code style="font-family:monospace;font-size:12px;color:#38c9f0;">.json</code> di folder yang sama dengan file HTML ini, lalu buka via server lokal (Live Server / <code style="font-family:monospace;font-size:12px;color:#38c9f0;">python -m http.server</code>).
+    </div>
+  </div>
+
+  <div class="card mb-16 start-section">
+    <div class="section-header mb-16">
+      <span class="section-title">🎯 Mulai Tryout</span>
+    </div>
+    <div class="form-row">
+      <div>
+        <label class="form-label">Mode Simulasi</label>
+        <div class="select-wrap">
+          <select id="mode-select" class="form-select">
+            <option value="full">🗂 Simulasi UTBK Full (195 soal)</option>
+            <option value="pu">🧠 Penalaran Umum</option>
+            <option value="ppu">📖 Peng. & Pemahaman Umum</option>
+            <option value="pbm">✍️ Pemahaman Bacaan & Menulis</option>
+            <option value="pk">🔢 Pengetahuan Kuantitatif</option>
+            <option value="pm">📐 Pengetahuan Matematika</option>
+            <option value="lbi">📝 Literasi Bahasa Indonesia</option>
+            <option value="lbe">🔤 Literasi Bahasa Inggris</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="form-label">Filter Kesulitan</label>
+        <div class="select-wrap">
+          <select id="diff-select" class="form-select">
+            <option value="all">✨ Semua (Seimbang)</option>
+            <option value="easy">🟢 Mudah</option>
+            <option value="medium">🟡 Sedang</option>
+            <option value="hard">🔴 Sulit</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-full btn-start" id="start-btn" onclick="startExam()" disabled>
+      🚀 Mulai Simulasi
+    </button>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <span class="section-title">📊 Riwayat Terbaru</span>
+      <button class="btn btn-ghost btn-sm" onclick="showScreen('history')">Lihat Semua →</button>
+    </div>
+    <div id="home-history-preview"></div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════
+     EXAM SCREEN
+════════════════════════════════════════════ -->
+<div id="screen-exam" class="screen">
+
+  <div id="exam-header">
+    <div class="exam-header-left">
+      <button class="btn btn-ghost btn-sm" onclick="confirmExit()">✕ Keluar</button>
+      <div id="exam-subtest-badge" class="exam-subtest-badge">
+        <span id="exam-icon" class="subtest-icon">📝</span>
+        <div>
+          <div id="exam-subtest-name" class="subtest-name">Subtest</div>
+          <div id="exam-progress-text" class="subtest-prog">0/0 dijawab</div>
+        </div>
+      </div>
+    </div>
+    <div class="exam-header-right">
+      <div id="exam-timer" class="exam-timer">⏱ 00:00</div>
+      <button class="btn btn-secondary btn-sm" onclick="toggleNav()" id="nav-toggle-btn">📋 Nav</button>
+    </div>
+  </div>
+
+  <div style="padding:16px 20px;">
+
+    <!-- Subtest tabs — hanya tampil saat review/setelah selesai -->
+    <div id="subtest-tabs" class="subtest-tabs" style="display:none;"></div>
+
+    <!-- Q nav panel -->
+    <div id="q-nav-wrap" style="display:none;" class="card-sm mb-16">
+      <div id="question-nav-grid" class="q-nav-grid"></div>
+      <div class="q-nav-legend">
+        <span><span class="legend-dot" style="background:var(--blue)"></span>Dijawab</span>
+        <span><span class="legend-dot" style="background:var(--yellow)"></span>Ditandai</span>
+        <span><span class="legend-dot" style="background:var(--bg4);border:1px solid var(--border2)"></span>Belum</span>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="progress-track">
+      <div class="progress-fill" id="q-progress-fill" style="width:0%"></div>
+    </div>
+
+    <!-- Question card -->
+    <div id="question-area" class="card"></div>
+
+    <!-- Action bar -->
+    <div class="question-actions">
+      <button class="btn btn-secondary" id="prev-btn" onclick="prevQ()">← Sebelumnya</button>
+      <div class="flex gap-8">
+        <button class="btn btn-secondary btn-sm" id="flag-btn" onclick="toggleFlag()">🚩 Tandai</button>
+        <button class="btn btn-primary" id="next-btn" onclick="nextQ()">Selanjutnya →</button>
+      </div>
+    </div>
+
+    <!-- Finish subtest bar -->
+    <div id="subtest-finish-wrap" class="finish-bar mt-16" style="display:none;">
+      <p>Sudah selesai mengerjakan soal ini? Lanjutkan ke subtest berikutnya.</p>
+      <button class="btn btn-danger btn-sm" onclick="confirmFinishSubtest()">Selesaikan & Lanjut ⏭</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     RESULT SCREEN
+════════════════════════════════════════════ -->
+<div id="screen-result" class="screen">
+  <div style="padding:20px;">
+    <div class="flex between mb-16">
+      <h2>📈 Hasil Tryout</h2>
+      <button class="btn btn-secondary btn-sm" onclick="showScreen('home')">🏠 Beranda</button>
+    </div>
+    <div id="result-content"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     HISTORY SCREEN
+════════════════════════════════════════════ -->
+<div id="screen-history" class="screen">
+  <div style="padding:20px;">
+    <div class="flex between mb-16">
+      <h2>📚 Riwayat Tryout</h2>
+      <button class="btn btn-secondary btn-sm" onclick="showScreen('home')">← Kembali</button>
+    </div>
+    <div id="history-content"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     MODAL OVERLAY
+════════════════════════════════════════════ -->
+<div id="modal-overlay" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <div id="modal-title" class="modal-title"></div>
+    <div id="modal-body" class="modal-body"></div>
+    <div id="modal-actions" class="modal-actions"></div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ========================================
+// CONFIG
+// ========================================
+const SUBTEST_CONFIG = {
+  pu:  { label:'Penalaran Umum',             icon:'🧠', file:'PU_SOAL.json',  time:30, quota:20 },
+  ppu: { label:'Peng. & Pemahaman Umum',     icon:'📖', file:'PPU_SOAL.json', time:15, quota:20 },
+  pbm: { label:'Pemahaman Bacaan & Menulis', icon:'✍️',  file:'PBM_SOAL.json', time:25, quota:20 },
+  pk:  { label:'Pengetahuan Kuantitatif',    icon:'🔢', file:'PK_SOAL.json',  time:20, quota:20 },
+  pm:  { label:'Pengetahuan Matematika',     icon:'📐', file:'PM_SOAL.json',  time:20, quota:15 },
+  lbi: { label:'Literasi Bahasa Indonesia',  icon:'📝', file:'LBI_SOAL.json', time:45, quota:30 },
+  lbe: { label:'Literasi Bahasa Inggris',    icon:'🔤', file:'LBE_SOAL.json', time:30, quota:20 },
+};
+const MODE_CONFIG = {
+  full:{ subtests:['pu','ppu','pbm','pk','pm','lbi','lbe'] },
+  pk:  { subtests:['pk'] }, pu: { subtests:['pu'] }, ppu:{ subtests:['ppu'] },
+  pbm: { subtests:['pbm'] }, pm:{ subtests:['pm'] }, lbi:{ subtests:['lbi'] }, lbe:{ subtests:['lbe'] },
+};
+const STORAGE_KEY = 'snbt_exam_state';
+const HISTORY_KEY = 'snbt_history';
+
+// ========================================
+// STATE
+// ========================================
+let allData = {};
+let exam    = null;       // state utama
+let timerInterval = null;
+let isReviewMode  = false;// true saat lihat hasil dari result screen
+
+// ========================================
+// INIT
+// ========================================
+window.onload = async function () {
+  disableRightClick();
+  disableCopyPaste();
+  window.addEventListener('beforeunload', handleBeforeUnload);
+  renderFileStatus();
+  await loadAllFiles();
+  renderHomeHistory();
+
+  // Pulihkan state jika ada sesi yang tersimpan
+  restoreExamState();
+};
+
+function disableRightClick() {
+  document.addEventListener('contextmenu', e => e.preventDefault());
+}
+function disableCopyPaste() {
+  document.addEventListener('copy',  e => e.preventDefault());
+  document.addEventListener('cut',   e => e.preventDefault());
+  document.addEventListener('paste', e => e.preventDefault());
+  document.addEventListener('selectstart', e => { if (document.getElementById('screen-exam').classList.contains('active')) e.preventDefault(); });
+}
+function handleBeforeUnload(e) {
+  if (exam && !isReviewMode && !exam.subtests.every(s => s.finished)) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+}
+
+// ========================================
+// LOAD FILES
+// ========================================
+async function loadAllFiles() {
+  for (const [key, cfg] of Object.entries(SUBTEST_CONFIG)) {
+    try {
+      const res = await fetch(cfg.file);
+      if (!res.ok) throw new Error('not found');
+      const json = await res.json();
+      let questions = [];
+      if (Array.isArray(json)) {
+        if (json[0] && json[0].questions) json.forEach(item => { questions = questions.concat(item.questions); });
+        else questions = json;
+      } else if (json.questions) {
+        questions = json.questions;
+      }
+      allData[key] = questions;
+    } catch(e) { allData[key] = []; }
+  }
+  renderFileStatus();
+  document.getElementById('start-btn').disabled = false;
+}
+
+function renderFileStatus() {
+  const grid    = document.getElementById('file-status-grid');
+  const countEl = document.getElementById('loaded-count');
+  let loaded = 0, html = '';
+  for (const [key, cfg] of Object.entries(SUBTEST_CONFIG)) {
+    const count = allData[key] ? allData[key].length : 0;
+    const ok = count > 0;
+    if (ok) loaded++;
+    html += `<div class="file-status-card ${ok?'loaded':''}">
+      <div class="card-icon">${cfg.icon}</div>
+      <div class="card-name">${cfg.label}</div>
+      <div class="flex gap-4 card-count">
+        <span class="status-dot ${ok?'dot-green':'dot-red'}"></span>
+        <span>${ok ? count+' soal' : 'Tidak ditemukan'}</span>
+      </div>
+    </div>`;
+  }
+  grid.innerHTML = html;
+  countEl.textContent = `${loaded}/${Object.keys(SUBTEST_CONFIG).length} file`;
+  countEl.className = loaded > 0 ? 'badge badge-green' : 'badge badge-red';
+}
+
+// ========================================
+// LOCAL STORAGE — SAVE / RESTORE
+// ========================================
+function saveExamState() {
+  if (!exam) return;
+  try {
+    // Konversi Set ke array agar bisa di-JSON-kan
+    const serializable = {
+      ...exam,
+      subtests: exam.subtests.map(st => ({
+        ...st,
+        flags: Array.from(st.flags),
+      })),
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+  } catch(e) {}
+}
+
+function restoreExamState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (!saved || !saved.subtests) return;
+
+    // Hitung sisa waktu berdasarkan timestamp
+    const elapsed = Math.floor((Date.now() - saved.savedAt) / 1000);
+
+    exam = {
+      ...saved,
+      subtests: saved.subtests.map((st, i) => {
+        // Hanya kurangi waktu pada subtest yang sedang aktif saat disimpan
+        const timeLeft = (i === saved.currentSubtest && !st.finished)
+          ? Math.max(0, st.timeLeft - elapsed)
+          : st.timeLeft;
+        return {
+          ...st,
+          flags: new Set(st.flags || []),
+          timeLeft,
+        };
+      }),
+    };
+
+    // Jika waktu habis pada subtest aktif, selesaikan dulu
+    const activeST = exam.subtests[exam.currentSubtest];
+    if (activeST && !activeST.finished && activeST.timeLeft <= 0) {
+      activeST.finished = true;
+      activeST.timeLeft = 0;
+    }
+
+    showModal(
+      '🔄 Lanjutkan Sesi?',
+      'Ditemukan sesi ujian yang belum selesai. Lanjutkan?',
+      [
+        { label:'Lanjutkan', cls:'btn-primary', cb: () => { closeModal(); showScreen('exam'); renderExamUI(); startTimer(); } },
+        { label:'Hapus & Mulai Baru', cls:'btn-danger', cb: () => { clearExamState(); exam = null; closeModal(); } },
+      ]
+    );
+  } catch(e) { clearExamState(); }
+}
+
+function clearExamState() {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+// ========================================
+// EXAM — START
+// ========================================
+function startExam() {
+  const mode = document.getElementById('mode-select').value;
+  const diff = document.getElementById('diff-select').value;
+  const examSubtests = [];
+
+  for (const key of MODE_CONFIG[mode].subtests) {
+    const cfg  = SUBTEST_CONFIG[key];
+    let pool   = (allData[key] || []).slice();
+    if (!pool.length) { alert(`Soal ${cfg.label} tidak ditemukan.`); continue; }
+    pool = stratifiedSample(pool, cfg.quota, diff);
+    examSubtests.push({
+      key, label:cfg.label, icon:cfg.icon,
+      timeLeft: cfg.time * 60,
+      totalTime: cfg.time * 60,
+      questions: pool,
+      answers: {},
+      flags: new Set(),
+      finished: false,
+      startedAt: null,   // dicatat saat mulai pertama kali
+    });
+  }
+
+  if (!examSubtests.length) { alert('Tidak ada soal tersedia.'); return; }
+
+  exam = {
+    subtests: examSubtests,
+    currentSubtest: 0,
+    currentQ: 0,
+    startTime: Date.now(),
+    mode,
+  };
+  exam.subtests[0].startedAt = Date.now();
+
+  isReviewMode = false;
+  clearExamState();
+  showScreen('exam');
+  renderExamUI();
+  startTimer();
+}
+
+// ========================================
+// EXAM — RENDER
+// ========================================
+function renderExamUI() {
+  renderSubtestTabs();
+  renderQuestion();
+  updateNavGrid();
+}
+
+function renderSubtestTabs() {
+  // Tab hanya untuk navigasi saat review mode
+  const tabsEl = document.getElementById('subtest-tabs');
+  if (isReviewMode) {
+    tabsEl.style.display = 'flex';
+    tabsEl.innerHTML = exam.subtests.map((st, i) => {
+      const cls = i === exam.currentSubtest ? 'active' : st.finished ? 'done' : '';
+      return `<div class="subtest-tab ${cls}" onclick="switchSubtestReview(${i})">${st.icon} ${st.label}</div>`;
+    }).join('');
+  } else {
+    tabsEl.style.display = 'none';
+  }
+}
+
+function switchSubtestReview(i) {
+  if (!isReviewMode) return; // tidak boleh pindah saat ujian berlangsung
+  exam.currentSubtest = i;
+  exam.currentQ = 0;
+  renderSubtestTabs();
+  renderQuestion();
+  updateNavGrid();
+  updateHeader();
+}
+
+function updateHeader() {
+  const st = currentST();
+  document.getElementById('exam-icon').textContent          = st.icon;
+  document.getElementById('exam-subtest-name').textContent  = st.label;
+  const answered = Object.keys(st.answers).length;
+  document.getElementById('exam-progress-text').textContent = `${answered}/${st.questions.length} dijawab`;
+}
+
+function renderQuestion() {
+  const st = currentST();
+  const q  = st.questions[exam.currentQ];
+  if (!q) return;
+  const total = st.questions.length;
+
+  // Progress bar
+  document.getElementById('q-progress-fill').style.width = ((exam.currentQ + 1) / total * 100) + '%';
+
+  const diffTag = (st.finished || isReviewMode) && q.difficulty
+    ? `<span class="badge ${diffBadge(q.difficulty)}">${q.difficulty}</span>` : '';
+
+  let html = `<div class="question-meta">
+    <span class="q-number">${String(exam.currentQ + 1).padStart(2,'0')} / ${total}</span>
+    ${diffTag}
+    ${q.subcategory ? `<span class="q-category">${q.subcategory}</span>` : ''}
+  </div>`;
+
+  // Content block (bacaan / gambar)
+  const cb = q.contentBlock || (q.contentBlocks && q.contentBlocks[0]);
+  if (cb) {
+    html += `<div class="content-block">`;
+    if (cb.title && cb.title.trim()) html += `<div class="content-block-title">${cb.title}</div>`;
+    if (cb.type === 'image' && cb.imageUrl)
+      html += `<img src="${escHtml(cb.imageUrl)}" alt="Gambar soal" onerror="this.style.display='none'">`;
+    else if (cb.content) html += renderMixed(cb.content);
+    html += `</div>`;
+  }
+
+  html += `<div class="question-text">${renderMixed(q.question)}</div>`;
+
+  // Opsi jawaban
+  if (q.questionFormat === 'category' && q.metadata && q.metadata.categories) {
+    html += renderCategoryOptions(q, st);
+  } else {
+    html += `<div class="options">`;
+    (q.options || []).forEach(opt => {
+      const answer = st.answers[exam.currentQ];
+      let cls = answer === opt.label ? 'selected' : '';
+      if (st.finished || isReviewMode) {
+        if (opt.label === q.correctAnswer)               cls = 'correct';
+        else if (answer === opt.label && answer !== q.correctAnswer) cls = 'wrong';
+      }
+      const locked = (st.finished || isReviewMode) ? 'pointer-events:none;' : '';
+      html += `<div class="option ${cls}" style="${locked}" onclick="selectAnswer('${opt.label}')">
+        <span class="option-label">${opt.label}</span>
+        <span class="option-text">${renderMixed(opt.text || '')}</span>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Pembahasan (hanya setelah selesai / review)
+  if ((st.finished || isReviewMode) && q.explanation) {
+    html += `<div class="explanation-box">
+      <div class="explanation-title">✅ Pembahasan</div>
+      ${renderMixed(q.explanation)}
+    </div>`;
+  }
+
+  document.getElementById('question-area').innerHTML = html;
+
+  // Tombol tandai
+  const fb = document.getElementById('flag-btn');
+  if (fb) {
+    fb.style.color = st.flags.has(exam.currentQ) ? 'var(--yellow)' : '';
+    fb.style.borderColor = st.flags.has(exam.currentQ) ? 'var(--yellow)' : '';
+    fb.style.display = (st.finished || isReviewMode) ? 'none' : '';
+  }
+
+  // Tombol prev
+  const pb = document.getElementById('prev-btn');
+  if (pb) {
+    pb.style.visibility = exam.currentQ > 0 ? 'visible' : 'hidden';
+  }
+
+  // Tombol next
+  const nb = document.getElementById('next-btn');
+  if (nb) {
+    if (isReviewMode) {
+      nb.textContent = exam.currentQ < total - 1 ? 'Selanjutnya →' : '✓ Selesai Review';
+    } else {
+      nb.textContent = exam.currentQ < total - 1 ? 'Selanjutnya →' : '✓ Selesai';
+    }
+  }
+
+  // Bar selesaikan subtest
+  const fw = document.getElementById('subtest-finish-wrap');
+  if (fw) fw.style.display = (!st.finished && !isReviewMode) ? 'flex' : 'none';
+
+  updateHeader();
+  saveExamState();
+}
+
+// ========================================
+// ANSWER & NAVIGATION
+// ========================================
+function selectAnswer(label) {
+  const st = currentST();
+  if (st.finished || isReviewMode) return;
+  st.answers[exam.currentQ] = label;
+  updateNavGrid();
+  renderQuestion();
+}
+
+function selectCategoryAnswer(optId, val) {
+  const st = currentST();
+  if (st.finished || isReviewMode) return;
+  if (!st.answers[exam.currentQ]) st.answers[exam.currentQ] = {};
+  st.answers[exam.currentQ][optId] = val;
+  updateNavGrid();
+  saveExamState();
+}
+
+function renderCategoryOptions(q, st) {
+  const cats  = q.metadata.categories;
+  const saved = st.answers[exam.currentQ] || {};
+  const locked = (st.finished || isReviewMode) ? 'disabled' : '';
+  return (q.options || []).map(opt => {
+    const sel = saved[opt.id] || '';
+    return `<div class="category-item">
+      <span>${opt.text}</span>
+      <select onchange="selectCategoryAnswer('${opt.id}', this.value)" ${locked}>
+        <option value="">— Pilih —</option>
+        ${cats.map(c => `<option value="${c}" ${sel === c ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join('');
+}
+
+function prevQ() {
+  if (exam.currentQ > 0) {
+    exam.currentQ--;
+    renderQuestion();
+    updateNavGrid();
+  }
+}
+
+function nextQ() {
+  const st    = currentST();
+  const total = st.questions.length;
+
+  if (isReviewMode) {
+    if (exam.currentQ < total - 1) {
+      exam.currentQ++;
+      renderQuestion();
+      updateNavGrid();
+    } else {
+      // Cari subtest berikutnya saat review
+      const next = exam.subtests.findIndex((s, i) => i > exam.currentSubtest);
+      if (next !== -1) { switchSubtestReview(next); }
+      else { showScreen('result'); }
+    }
+    return;
+  }
+
+  if (exam.currentQ < total - 1) {
+    exam.currentQ++;
+    renderQuestion();
+    updateNavGrid();
+  } else {
+    // Soal terakhir di subtest ini
+    if (!st.finished) {
+      confirmFinishSubtest();
+    }
+  }
+}
+
+function goToQ(i) {
+  const st = currentST();
+  // Saat ujian berlangsung: hanya bisa ke soal yang sudah dikunjungi (≤ currentQ) atau sudah dijawab
+  if (!st.finished && !isReviewMode && i > exam.currentQ && st.answers[i] === undefined) {
+    // Izinkan lompat ke depan, tapi catat sebagai dilewati
+  }
+  exam.currentQ = i;
+  renderQuestion();
+  updateNavGrid();
+}
+
+function toggleFlag() {
+  const st = currentST();
+  if (st.finished || isReviewMode) return;
+  if (st.flags.has(exam.currentQ)) st.flags.delete(exam.currentQ);
+  else st.flags.add(exam.currentQ);
+  updateNavGrid();
+  renderQuestion();
+}
+
+function updateNavGrid() {
+  const st   = currentST();
+  const grid = document.getElementById('question-nav-grid');
+  grid.innerHTML = st.questions.map((q, i) => {
+    let cls = i === exam.currentQ ? 'current' : (st.answers[i] !== undefined ? 'answered' : '');
+    if (st.flags.has(i) && i !== exam.currentQ) cls = 'flagged';
+    return `<div class="q-nav-btn ${cls}" onclick="goToQ(${i})">${i + 1}</div>`;
+  }).join('');
+}
+
+function toggleNav() {
+  const w    = document.getElementById('q-nav-wrap');
+  const open = w.style.display === 'none' || !w.style.display;
+  w.style.display = open ? 'block' : 'none';
+  document.getElementById('nav-toggle-btn').textContent = open ? '✕ Tutup' : '📋 Nav';
+}
+
+// ========================================
+// FINISH SUBTEST
+// ========================================
+function confirmFinishSubtest() {
+  const st         = currentST();
+  const answered   = Object.keys(st.answers).length;
+  const unanswered = st.questions.length - answered;
+
+  let body = `Kamu akan menyelesaikan subtest <strong>${st.label}</strong>.`;
+  if (unanswered > 0) body += `<br><br><span style="color:var(--yellow)">⚠️ ${unanswered} soal belum dijawab.</span>`;
+  body += `<br><br>Setelah ini, kamu <strong>tidak bisa kembali</strong> ke subtest ini.`;
+
+  showModal('Selesaikan Subtest?', body, [
+    { label: 'Ya, Selesaikan', cls: 'btn-danger', cb: () => { closeModal(); finishSubtest(); } },
+    { label: 'Batal', cls: 'btn-secondary', cb: closeModal },
+  ]);
+}
+
+function finishSubtest() {
+  const st = currentST();
+  st.finished  = true;
+  st.timeLeft  = 0;
+
+  // Semua subtest selesai?
+  if (exam.subtests.every(s => s.finished)) {
+    clearInterval(timerInterval);
+    clearExamState();
+    showResults();
+    return;
+  }
+
+  // Pindah ke subtest berikutnya secara otomatis
+  const next = exam.subtests.findIndex(s => !s.finished);
+  if (next !== -1) {
+    exam.currentSubtest = next;
+    exam.currentQ = 0;
+    exam.subtests[next].startedAt = Date.now();
+    renderExamUI();
+    startTimer();
+
+    // Tampilkan transisi subtest
+    showSubtestTransition(exam.subtests[next]);
+  }
+}
+
+function showSubtestTransition(st) {
+  showModal(
+    `${st.icon} Subtest Berikutnya`,
+    `<div style="text-align:center;padding:8px 0;">
+      <div style="font-size:32px;margin-bottom:12px;">${st.icon}</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px;">${st.label}</div>
+      <div style="color:var(--text2);font-size:14px;">${st.questions.length} soal · ${Math.floor(st.totalTime/60)} menit</div>
+    </div>`,
+    [{ label: 'Mulai Sekarang ▶', cls: 'btn-primary', cb: closeModal }]
+  );
+}
+
+// ========================================
+// TIMER — berbasis timestamp agar akurat
+// ========================================
+function startTimer() {
+  clearInterval(timerInterval);
+  const st = currentST();
+  if (!st || st.finished) { updateTimerDisplay(); return; }
+
+  // Simpan referensi waktu mulai untuk kalkulasi presisi
+  st._timerBase    = Date.now();
+  st._timerInitial = st.timeLeft;
+
+  timerInterval = setInterval(() => {
+    const activeST = currentST();
+    if (!activeST || activeST.finished) { clearInterval(timerInterval); return; }
+
+    const elapsed = Math.floor((Date.now() - activeST._timerBase) / 1000);
+    activeST.timeLeft = Math.max(0, activeST._timerInitial - elapsed);
+
+    updateTimerDisplay();
+
+    if (activeST.timeLeft <= 0) {
+      clearInterval(timerInterval);
+      activeST.finished = true;
+      saveExamState();
+      showTimesUpAndContinue();
+    } else {
+      // Auto-save setiap 10 detik
+      if (elapsed % 10 === 0) saveExamState();
+    }
+  }, 500); // poll lebih sering untuk akurasi
+  updateTimerDisplay();
+}
+
+function showTimesUpAndContinue() {
+  const st = currentST();
+  const allDone = exam.subtests.every(s => s.finished);
+
+  if (allDone) {
+    showModal('⏰ Waktu Habis!', 'Semua subtest telah selesai. Melihat hasil...', [
+      { label: 'Lihat Hasil', cls: 'btn-primary', cb: () => { closeModal(); clearExamState(); showResults(); } },
+    ]);
+    return;
+  }
+
+  showModal(
+    `⏰ Waktu ${st.label} Habis!`,
+    'Jawaban dikunci otomatis. Lanjut ke subtest berikutnya.',
+    [{ label: 'Lanjut ▶', cls: 'btn-primary', cb: () => { closeModal(); finishSubtest(); } }]
+  );
+}
+
+function updateTimerDisplay() {
+  const st = currentST();
+  const el = document.getElementById('exam-timer');
+  if (!st) return;
+  const t = Math.max(0, st.timeLeft);
+  const m = String(Math.floor(t / 60)).padStart(2,'0');
+  const s = String(t % 60).padStart(2,'0');
+  el.textContent = `⏱ ${m}:${s}`;
+  el.className   = 'exam-timer';
+  if      (t < 60)  el.classList.add('danger');
+  else if (t < 300) el.classList.add('warning');
+}
+
+// ========================================
+// EXIT
+// ========================================
+function confirmExit() {
+  showModal(
+    '⚠️ Keluar dari Ujian?',
+    'Progress kamu akan disimpan. Kamu bisa melanjutkan nanti, tapi waktu tetap berjalan.',
+    [
+      { label: 'Ya, Keluar', cls: 'btn-danger',     cb: () => { clearInterval(timerInterval); saveExamState(); closeModal(); exam = null; showScreen('home'); } },
+      { label: 'Lanjutkan', cls: 'btn-secondary',  cb: closeModal },
+    ]
+  );
+}
+
+// ========================================
+// IRT — Item Response Theory (2PL simplified)
+// ========================================
+function computeIRT(questions, answers) {
+  let correct = 0;
+  const total = questions.length;
+  if (!total) return { irt:500, rawScore:0, correct:0, total:0, pct:0, theta:0 };
+
+  // Hitung benar & skor mentah
+  questions.forEach((q, i) => { if (isCorrect(q, answers[i])) correct++; });
+  const rawScore = correct * 4;
+
+  // Estimasi theta dengan gradient descent sederhana (2PL IRT)
+  let theta = 0;
+  const lr  = 0.3; // learning rate
+  const ITER = 20;
+
+  for (let iter = 0; iter < ITER; iter++) {
+    let grad = 0;
+    questions.forEach((q, i) => {
+      const b   = parseFloat(q.difficulty_irt  ?? q.b ?? 0);   // fallback 0
+      const a   = parseFloat(q.discrimination  ?? q.a ?? 1);   // fallback 1
+      const resp = isCorrect(q, answers[i]) ? 1 : 0;
+      const P   = 1 / (1 + Math.exp(-a * (theta - b)));
+      grad += a * (resp - P);
+    });
+    theta += lr * grad / total;
+    // Clamp theta ke range wajar
+    theta = Math.max(-4, Math.min(4, theta));
+  }
+
+  const irtScore = Math.round(Math.max(200, Math.min(800, 500 + theta * 100)));
+  return {
+    irt: irtScore,
+    rawScore,
+    correct,
+    total,
+    pct: Math.round(correct / total * 100),
+    theta: Math.round(theta * 100) / 100,
+  };
+}
+
+function isCorrect(q, answer) {
+  if (!answer) return false;
+  if (q.questionFormat === 'category') {
+    if (typeof q.correctAnswer !== 'object' || typeof answer !== 'object') return false;
+    return Object.keys(q.correctAnswer).every(k => answer[k] === q.correctAnswer[k]);
+  }
+  return answer === q.correctAnswer;
+}
+
+// ========================================
+// RESULTS
+// ========================================
+function showResults() {
+  clearInterval(timerInterval);
+  const results = exam.subtests.map(st => ({
+    key:   st.key,
+    label: st.label,
+    icon:  st.icon,
+    ...computeIRT(st.questions, st.answers),
+  }));
+
+  const totalIRT     = Math.round(results.reduce((a, r) => a + r.irt, 0) / results.length);
+  const totalCorrect = results.reduce((a, r) => a + r.correct, 0);
+  const totalQ       = results.reduce((a, r) => a + r.total, 0);
+  const totalRaw     = results.reduce((a, r) => a + r.rawScore, 0);
+  const avgTheta     = Math.round(results.reduce((a, r) => a + r.theta, 0) / results.length * 100) / 100;
+
+  const record = {
+    id:           Date.now(),
+    date:         new Date().toLocaleString('id-ID'),
+    mode:         exam.mode,
+    totalIRT,
+    totalRaw,
+    totalCorrect,
+    totalQ,
+    avgTheta,
+    duration:     Math.round((Date.now() - exam.startTime) / 1000),
+    subtests:     results,
+  };
+
+  saveHistory(record);
+  renderResultScreen(record);
+  showScreen('result');
+}
+
+function renderResultScreen(record) {
+  const el  = document.getElementById('result-content');
+  const pct = Math.round(record.totalCorrect / record.totalQ * 100);
+  const grade = pct >= 80 ? 'Sangat Baik 🏆'
+               : pct >= 65 ? 'Baik 👍'
+               : pct >= 50 ? 'Cukup 📚'
+               : 'Perlu Latihan 💪';
+  const gradeColor = pct >= 80 ? 'var(--green)' : pct >= 65 ? 'var(--cyan)' : pct >= 50 ? 'var(--yellow)' : 'var(--red)';
+  const radius     = 46;
+  const circ       = 2 * Math.PI * radius;
+  const dashOffset = circ - (record.totalIRT - 100) / 700 * circ;
+
+  let html = `<div class="result-hero mb-16">
+    <div class="score-circle">
+      <svg width="110" height="110" viewBox="0 0 110 110">
+        <defs>
+          <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#5b8dee"/>
+            <stop offset="100%" stop-color="#38c9f0"/>
+          </linearGradient>
+        </defs>
+        <circle class="score-circle-track" cx="55" cy="55" r="${radius}"/>
+        <circle class="score-circle-fill" cx="55" cy="55" r="${radius}"
+          stroke-dasharray="${circ.toFixed(2)}" stroke-dashoffset="${dashOffset.toFixed(2)}"/>
+      </svg>
+      <div class="score-circle-inner">
+        <div class="score-value">${record.totalIRT}</div>
+        <div class="score-unit">IRT</div>
+      </div>
+    </div>
+    <div class="result-details">
+      <div class="result-grade" style="color:${gradeColor}">${grade}</div>
+      <div class="result-stats">
+        <span><strong>${record.totalCorrect}</strong> / ${record.totalQ} benar</span>
+        <span><strong>${pct}%</strong></span>
+        <span>Skor Mentah: <strong>${record.totalRaw}</strong></span>
+        <span>θ IRT: <strong>${record.avgTheta}</strong></span>
+        <span>⏱ ${fmtDuration(record.duration)}</span>
+        <span class="text-muted2">${record.date}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-16">
+    <div class="section-title mb-12">Skor Per Subtest</div>
+    <div class="subtest-results">`;
+
+  record.subtests.forEach(st => {
+    const bc = st.pct >= 65 ? 'var(--green)' : st.pct >= 40 ? 'var(--blue)' : 'var(--red)';
+    html += `<div class="subtest-result-row">
+      <span class="subtest-result-icon">${st.icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div class="subtest-result-name">${st.label}</div>
+        <div class="subtest-result-bar-wrap mt-4">
+          <div class="subtest-result-bar" style="width:${st.pct}%;background:${bc}"></div>
+        </div>
+      </div>
+      <div class="subtest-result-score">
+        <div class="irt">${st.irt}</div>
+        <div class="detail">${st.correct}/${st.total} · ${st.pct}% · Raw:${st.rawScore}</div>
+        <div class="detail" style="color:var(--text3)">θ = ${st.theta}</div>
+      </div>
+    </div>`;
+  });
+
+  html += `</div></div>
+
+  <div class="card mb-16">
+    <div class="section-title mb-12">Distribusi Skor IRT</div>
+    <canvas id="result-chart"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="section-title mb-12">Review Soal & Pembahasan</div>
+    <div class="review-grid">`;
+
+  exam.subtests.forEach((st, i) => {
+    html += `<button class="btn btn-secondary btn-sm" onclick="enterReviewMode(${i})">${st.icon} ${st.label}</button>`;
+  });
+  html += `</div></div>`;
+
+  el.innerHTML = html;
+  setTimeout(() => drawBarChart('result-chart', record.subtests.map(s => s.label.split(' ')[0]), record.subtests.map(s => s.irt)), 80);
+}
+
+function enterReviewMode(i) {
+  isReviewMode = true;
+  exam.currentSubtest = i;
+  exam.currentQ = 0;
+  exam.subtests.forEach(s => { s.finished = true; }); // pastikan semua ditandai selesai
+  showScreen('exam');
+  renderExamUI();
+  updateTimerDisplay();
+}
+
+// ========================================
+// HISTORY
+// ========================================
+function saveHistory(r) {
+  const hist = getHistory();
+  hist.unshift(r);
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(hist.slice(0, 50))); } catch(e) {}
+}
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch(e) { return []; }
+}
+function renderHomeHistory() {
+  const hist = getHistory().slice(0, 3);
+  const el   = document.getElementById('home-history-preview');
+  if (!hist.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>Belum ada riwayat. Mulai simulasi pertamamu!</p></div>';
+    return;
+  }
+  el.innerHTML = `<div class="history-list">${hist.map(r => historyCard(r, true)).join('')}</div>`;
+}
+function renderHistoryScreen() {
+  const hist = getHistory();
+  const el   = document.getElementById('history-content');
+  if (!hist.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>Belum ada riwayat tryout.</p></div>';
+    return;
+  }
+  let html = '';
+  if (hist.length > 1) {
+    html += `<div class="card mb-16"><div class="section-title mb-12">📈 Tren Skor IRT</div><canvas id="history-chart"></canvas></div>`;
+  }
+  html += `<div class="history-list">${hist.map(r => historyCard(r, false)).join('')}</div>`;
+  el.innerHTML = html;
+  if (hist.length > 1) {
+    setTimeout(() => {
+      drawLineChart('history-chart',
+        hist.slice().reverse().map(r => r.date.split(',')[0]),
+        hist.slice().reverse().map(r => r.totalIRT));
+    }, 80);
+  }
+}
+function historyCard(r, compact) {
+  const pct = Math.round(r.totalCorrect / r.totalQ * 100);
+  let html = `<div class="history-card">
+    <div class="history-score-pill">
+      <div class="score">${r.totalIRT}</div><div class="label">IRT</div>
+    </div>
+    <div class="history-info">
+      <div class="bold">${r.totalCorrect}/${r.totalQ} benar <span class="text-muted semibold">(${pct}%)</span></div>
+      <div class="history-meta"><span>📅 ${r.date}</span><span>⏱ ${fmtDuration(r.duration || 0)}</span></div>`;
+  if (!compact && r.subtests) {
+    html += `<div class="history-tags">${r.subtests.map(st => `<span class="history-tag">${st.icon} ${st.irt}</span>`).join('')}</div>`;
+  }
+  html += `</div></div>`;
+  return html;
+}
+
+// ========================================
+// SCREEN SWITCHING
+// ========================================
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  if (name === 'history') renderHistoryScreen();
+  if (name === 'home')    renderHomeHistory();
+  window.scrollTo(0, 0);
+}
+
+// ========================================
+// MODAL
+// ========================================
+function showModal(title, body, actions) {
+  document.getElementById('modal-title').innerHTML   = title;
+  document.getElementById('modal-body').innerHTML    = body;
+  document.getElementById('modal-actions').innerHTML = actions.map((a, i) =>
+    `<button class="btn ${a.cls}" onclick="__modalAction(${i})">${a.label}</button>`
+  ).join('');
+  window.__modalActions = actions;
+  document.getElementById('modal-overlay').style.display = 'flex';
+}
+function __modalAction(i) { window.__modalActions[i].cb(); }
+function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; }
+
+// ========================================
+// CHARTS
+// ========================================
+function drawBarChart(canvasId, labels, values) {
+  const canvas = document.getElementById(canvasId); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.parentElement.clientWidth - 2, H = 200;
+  canvas.width = W; canvas.height = H;
+  const min = 100, max = 800, padL = 44, padR = 12, padT = 24, padB = 36;
+  const bw = (W - padL - padR) / labels.length;
+  ctx.fillStyle = '#181c28'; ctx.fillRect(0, 0, W, H);
+  [200,400,600,800].forEach(v => {
+    const y = padT + (1 - (v - min) / (max - min)) * (H - padT - padB);
+    ctx.strokeStyle = '#252a3d'; ctx.lineWidth = 1; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle = '#4a5572'; ctx.font = '10px monospace';
+    ctx.textAlign = 'right'; ctx.fillText(v, padL - 6, y + 4);
+  });
+  values.forEach((val, i) => {
+    const x = padL + i * bw + bw * .12, w = bw * .76;
+    const h = Math.max(2, ((val - min) / (max - min)) * (H - padT - padB));
+    const y = padT + (H - padT - padB) - h;
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, '#38c9f0'); g.addColorStop(1, '#5b8dee');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 4); ctx.fill();
+    ctx.fillStyle = '#dce3f0'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(val, x + w / 2, y - 6);
+    ctx.fillStyle = '#7f8fad'; ctx.font = '10px sans-serif';
+    ctx.fillText(labels[i].substring(0, 5), x + w / 2, H - padB + 14);
+  });
+}
+
+function drawLineChart(canvasId, labels, values) {
+  const canvas = document.getElementById(canvasId); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.parentElement.clientWidth - 2, H = 160;
+  canvas.width = W; canvas.height = H;
+  const padL = 44, padR = 16, padT = 20, padB = 28;
+  const vMin = Math.max(100, Math.min(...values) - 60), vMax = Math.min(800, Math.max(...values) + 60);
+  ctx.fillStyle = '#181c28'; ctx.fillRect(0, 0, W, H);
+  for (let i = 0; i <= 4; i++) {
+    const v = vMin + (vMax - vMin) / 4 * i;
+    const y = padT + (1 - (v - vMin) / (vMax - vMin)) * (H - padT - padB);
+    ctx.strokeStyle = '#252a3d'; ctx.lineWidth = 1; ctx.setLineDash([3,5]);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle = '#4a5572'; ctx.font = '10px monospace';
+    ctx.textAlign = 'right'; ctx.fillText(Math.round(v), padL - 6, y + 4);
+  }
+  const pts = values.map((v, i) => ({
+    x: padL + (W - padL - padR) / (values.length - 1 || 1) * i,
+    y: padT + (1 - (v - vMin) / (vMax - vMin)) * (H - padT - padB),
+  }));
+  const ag = ctx.createLinearGradient(0, padT, 0, H - padB);
+  ag.addColorStop(0, 'rgba(91,141,238,.25)'); ag.addColorStop(1, 'rgba(91,141,238,0)');
+  ctx.fillStyle = ag; ctx.beginPath(); ctx.moveTo(pts[0].x, H - padB);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[pts.length - 1].x, H - padB); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#5b8dee'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round';
+  ctx.beginPath(); pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)); ctx.stroke();
+  pts.forEach((p, i) => {
+    ctx.fillStyle = '#0c0e14'; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#38c9f0'; ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#dce3f0'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(values[i], p.x, p.y - 10);
+  });
+}
+
+// ========================================
+// HELPERS
+// ========================================
+function currentST() { return exam && exam.subtests[exam.currentSubtest]; }
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function stratifiedSample(pool, quota, diffFilter) {
+  if (diffFilter !== 'all') {
+    const filtered = pool.filter(q => q.difficulty === diffFilter);
+    const result   = shuffle(filtered).slice(0, quota);
+    if (result.length < quota) {
+      const used = new Set(result.map(q => q.id));
+      return shuffle(result.concat(shuffle(pool.filter(q => !used.has(q.id))).slice(0, quota - result.length)));
+    }
+    return result;
+  }
+  const easy   = shuffle(pool.filter(q => q.difficulty === 'easy'));
+  const medium = shuffle(pool.filter(q => q.difficulty === 'medium'));
+  const hard   = shuffle(pool.filter(q => q.difficulty === 'hard'));
+  const other  = shuffle(pool.filter(q => !['easy','medium','hard'].includes(q.difficulty)));
+  const nE = Math.round(quota * .30), nH = Math.round(quota * .30), nM = quota - nE - nH;
+  let sel = [...easy.slice(0, nE), ...medium.slice(0, nM), ...hard.slice(0, nH), ...other.slice(0, Math.max(0, quota - nE - nM - nH))];
+  if (sel.length < quota) {
+    const used = new Set(sel.map(q => q.id));
+    sel = sel.concat(shuffle(pool.filter(q => !used.has(q.id))).slice(0, quota - sel.length));
+  }
+  return shuffle(sel).slice(0, quota);
+}
+
+function diffBadge(d) {
+  return d === 'easy' ? 'badge-green' : d === 'medium' ? 'badge-yellow' : d === 'hard' ? 'badge-red' : 'badge-blue';
+}
+function fmtDuration(s) { return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2,'0')}s`; }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderMixed(text) {
+  if (!text) return '';
+  let t = String(text);
+
+  // 1. Lindungi blok $...$ dari proses lain dengan placeholder
+  const mathChunks = [];
+  t = t.replace(/\$\$([^$]+)\$\$|\$([^$\n]+)\$/g, (match) => {
+    const idx = mathChunks.length;
+    mathChunks.push(match);
+    return `%%MATH_${idx}%%`;
+  });
+
+  // 2. Render tabel markdown jika ada
+  if (t.includes('| :') || t.includes('|:') || (t.includes('|') && t.includes('---'))) {
+    t = renderMarkdownTable(t);
+  } else {
+    t = t.replace(/\n/g, '<br>');
+  }
+
+  // 3. Render bold (**teks**) dan italic (*teks*)
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  // 4. Kembalikan placeholder math dan render dengan KaTeX
+  t = t.replace(/%%MATH_(\d+)%%/g, (_, idx) => {
+    const raw = mathChunks[parseInt(idx)];
+    const isDisplay = raw.startsWith('$$');
+    const inner = isDisplay ? raw.slice(2, -2) : raw.slice(1, -1);
+    try {
+      return katex.renderToString(inner, {
+        throwOnError: false,
+        displayMode: isDisplay,
+        output: 'html'
+      });
+    } catch(e) {
+      return raw; // fallback teks asli jika error
+    }
+  });
+
+  return t;
+}
+function renderMarkdownTable(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  let inTable = false, result = '', tableLines = [];
+  for (const line of lines) {
+    if (line.trim().startsWith('|')) {
+      if (!inTable) { inTable = true; tableLines = []; }
+      tableLines.push(line.trim());
+    } else {
+      if (inTable) { result += buildTable(tableLines); inTable = false; tableLines = []; }
+      result += line + '<br>';
+    }
+  }
+  if (inTable) result += buildTable(tableLines);
+  return result;
+}
+function buildTable(lines) {
+  const dataRows = lines.filter(r => !r.replace(/\|/g,'').match(/^[-:\s]+$/));
+  if (!dataRows.length) return '';
+  let html = '<table class="q-table">';
+  dataRows.forEach((row, i) => {
+    const cells = row.split('|').filter((c, ci) => ci > 0 && ci < row.split('|').length - 1);
+    const tag   = i === 0 ? 'th' : 'td';
+    html += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
+  });
+  return html + '</table>';
+}
+</script>
+</body>
+</html>
